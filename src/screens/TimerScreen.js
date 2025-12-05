@@ -6,6 +6,11 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 're
 import { useSettings } from '../context/SettingsContext';
 import CustomAlert from '../components/CustomAlert';
 import { useCustomAlert } from '../hooks/useCustomAlert';
+import { saveSession } from '../utils/storage';
+import MotivationBanner from '../components/MotivationBanner';
+import MotivationToast from '../components/MotivationToast';
+import { MOTIVATION_MESSAGES } from '../constants/motivationMessages';
+
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.65;
@@ -31,6 +36,11 @@ const TimerScreen = () => {
     const [currentMode, setCurrentMode] = useState(TIMER_MODES.POMODORO);
     const [completedPomodoros, setCompletedPomodoros] = useState(0);
     const [totalDuration, setTotalDuration] = useState(settings.pomodoroMinutes * 60);
+
+    // Toast Notification State
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastMessage, setToastMessage] = useState(null);
+
 
     // AppState referansı - Uygulama durumunu takip için
     const appState = useRef(AppState.currentState);
@@ -59,8 +69,6 @@ const TimerScreen = () => {
         console.log('🔵 AppState Listener oluşturuldu');
 
         const subscription = AppState.addEventListener('change', nextAppState => {
-            console.log('🟢 AppState DEĞİŞTİ:', appState.current, '→', nextAppState);
-
             // Sadece Pomodoro modunda kontrol et
             const isPomodoroMode = currentModeRef.current === TIMER_MODES.POMODORO;
 
@@ -118,7 +126,6 @@ const TimerScreen = () => {
 
         // Cleanup - Memory leak önleme
         return () => {
-            console.log('🔴 AppState Listener temizlendi');
             subscription.remove();
         };
     }, []);
@@ -132,7 +139,7 @@ const TimerScreen = () => {
             }, 1000);
         } else if (timeLeft === 0 && isActive) {
             setIsActive(false);
-            handleTimerComplete();
+            handleTimerComplete(); // Otomatik bitiş
         }
         return () => clearInterval(interval);
     }, [isActive, timeLeft]);
@@ -156,58 +163,126 @@ const TimerScreen = () => {
         setTotalDuration(duration);
     };
 
+    // Seansı Kaydetme ve Bitirme Mantığı
+    const handleSessionComplete = async (isAutoCompleted = false) => {
+        // Sadece Pomodoro modunda kayıt yap
+        if (currentMode !== TIMER_MODES.POMODORO) {
+            if (isAutoCompleted) handleBreakComplete();
+            return;
+        }
+
+        const elapsedSeconds = totalDuration - timeLeft;
+        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+        // En az 1 dakika çalışılmışsa kaydet
+        if (elapsedMinutes >= 1) {
+            const sessionData = {
+                category: activeCategory ? activeCategory.name : 'Genel',
+                duration: elapsedMinutes,
+                distractionCount: distractionCount,
+                date: new Date().toISOString(),
+                completed: isAutoCompleted
+            };
+
+            await saveSession(sessionData);
+
+            // Özet Alert'i Göster
+            showAlert({
+                title: '✅ Seans Kaydedildi!',
+                message: `📂 Kategori: ${sessionData.category}\n⏱️ Süre: ${elapsedMinutes} dakika\n🔔 Dikkat Dağınıklığı: ${distractionCount} kez\n\n${isAutoCompleted ? '🎉 Tam seans tamamlandı!' : '⏸️ Erken sonlandırıldı'}`,
+                type: 'success',
+                buttons: [
+                    {
+                        text: 'Tamam',
+                        onPress: () => {
+                            // Seans sonrası reset işlemleri
+                            if (isAutoCompleted) {
+                                handlePomodoroSuccess();
+                            } else {
+                                resetTimerState();
+                            }
+                        }
+                    }
+                ]
+            });
+        } else {
+            // 1 dakikadan az ise sadece resetle veya mola bitişi ise işle
+            if (isAutoCompleted) {
+                handlePomodoroSuccess();
+            } else {
+                resetTimerState();
+            }
+        }
+    };
+
+    // Pomodoro Başarıyla Bittiğinde (Otomatik)
     const handleTimerComplete = () => {
-        // Bildirim
+        setIsActive(false);
+        // Titreşim
         if (settings.vibrationEnabled) {
             Vibration.vibrate([0, 500, 200, 500]);
         }
 
-        if (currentMode === TIMER_MODES.POMODORO) {
-            const newCount = completedPomodoros + 1;
-            setCompletedPomodoros(newCount);
+        // Kaydet ve işle
+        handleSessionComplete(true);
+    };
 
-            // Uzun mola zamanı mı?
-            if (newCount % settings.sessionsUntilLongBreak === 0) {
-                showAlert({
-                    title: '🎉 Harika İş!',
-                    message: `${settings.sessionsUntilLongBreak} Pomodoro tamamladın! Uzun mola zamanı.`,
-                    type: 'success',
-                    icon: 'trophy',
-                    buttons: [
-                        {
-                            text: 'Uzun Mola Başlat',
-                            onPress: () => switchMode(TIMER_MODES.LONG_BREAK),
-                        },
-                    ]
-                });
-            } else {
-                showAlert({
-                    title: 'Pomodoro Tamamlandı!',
-                    message: `Kısa bir mola zamanı. ${newCount} / ${settings.sessionsUntilLongBreak} Pomodoro`,
-                    type: 'success',
-                    buttons: [
-                        {
-                            text: 'Kısa Mola Başlat',
-                            onPress: () => switchMode(TIMER_MODES.SHORT_BREAK),
-                        },
-                    ]
-                });
-            }
-        } else {
-            // Mola bitti
+    // Pomodoro sonrası mola önerisi (handleSessionComplete içinden çağrılır)
+    const handlePomodoroSuccess = () => {
+        const newCount = completedPomodoros + 1;
+        setCompletedPomodoros(newCount);
+
+        // Uzun mola zamanı mı?
+        if (newCount % settings.sessionsUntilLongBreak === 0) {
             showAlert({
-                title: 'Mola Bitti!',
-                message: 'Yeni bir Pomodoro başlatmaya hazır mısın?',
-                type: 'info',
-                icon: 'cafe',
+                title: '🎉 Harika İş!',
+                message: `${settings.sessionsUntilLongBreak} Pomodoro tamamladın! Uzun mola zamanı.`,
+                type: 'success',
+                icon: 'trophy',
                 buttons: [
                     {
-                        text: 'Pomodoro Başlat',
-                        onPress: () => switchMode(TIMER_MODES.POMODORO),
+                        text: 'Uzun Mola Başlat',
+                        onPress: () => switchMode(TIMER_MODES.LONG_BREAK),
+                    },
+                ]
+            });
+        } else {
+            showAlert({
+                title: 'Pomodoro Tamamlandı!',
+                message: `Kısa bir mola zamanı. ${newCount} / ${settings.sessionsUntilLongBreak} Pomodoro`,
+                type: 'success',
+                buttons: [
+                    {
+                        text: 'Kısa Mola Başlat',
+                        onPress: () => switchMode(TIMER_MODES.SHORT_BREAK),
                     },
                 ]
             });
         }
+    };
+
+    // Mola Bittiğinde
+    const handleBreakComplete = () => {
+        showAlert({
+            title: '☕ Mola Bitti!',
+            message: 'Yeni bir Pomodoro başlatmaya hazır mısın?',
+            type: 'info',
+            icon: 'cafe',
+            buttons: [
+                {
+                    text: 'Pomodoro Başlat',
+                    onPress: () => switchMode(TIMER_MODES.POMODORO),
+                },
+            ]
+        });
+    };
+
+    // State'leri sıfırla
+    const resetTimerState = () => {
+        setIsActive(false);
+        updateTimerForMode(currentMode);
+        setDistractionCount(0);
+        wasInterruptedRef.current = false;
     };
 
     const switchMode = (mode) => {
@@ -225,20 +300,19 @@ const TimerScreen = () => {
     };
 
     const handleStart = () => {
-        console.log('▶️ Timer başlatıldı');
         setIsActive(true);
     };
 
     const handlePause = () => {
-        console.log('⏸️ Timer duraklatıldı (manuel)');
         setIsActive(false);
         wasInterruptedRef.current = false;
     };
 
-    const handleReset = () => {
+    // Manuel Bitirme ve Kaydetme Butonu
+    const handleStopAndSave = () => {
         showAlert({
             title: 'Seansı Bitir',
-            message: 'Seansı sonlandırmak istediğinize emin misiniz?',
+            message: 'Seansı şimdi bitirmek ve kaydetmek istediğinize emin misiniz?',
             type: 'warning',
             buttons: [
                 {
@@ -246,13 +320,27 @@ const TimerScreen = () => {
                     style: 'cancel'
                 },
                 {
-                    text: 'Bitir',
+                    text: 'Bitir ve Kaydet',
                     onPress: () => {
                         setIsActive(false);
-                        updateTimerForMode(currentMode);
-                        setDistractionCount(0);
-                        wasInterruptedRef.current = false;
+                        handleSessionComplete(false); // Manuel bitiş
                     },
+                },
+            ]
+        });
+    };
+
+    // Tamamen Sıfırlama (Kaydetmeden)
+    const handleReset = () => {
+        showAlert({
+            title: 'Sıfırla',
+            message: 'Seansı kaydetmeden sıfırlamak istediğinize emin misiniz?',
+            type: 'error',
+            buttons: [
+                { text: 'İptal', style: 'cancel' },
+                {
+                    text: 'Sıfırla',
+                    onPress: () => resetTimerState(),
                 },
             ]
         });
@@ -445,6 +533,17 @@ const TimerScreen = () => {
                     </View>
                 </View>
 
+                {/* Motivation Banner - Sadece Pomodoro modunda ve aktifken */}
+                {currentMode === TIMER_MODES.POMODORO && (
+                    <View style={styles.motivationContainer}>
+                        <MotivationBanner
+                            progress={1 - (timeLeft / totalDuration)}
+                            isActive={isActive}
+                            distractionCount={distractionCount}
+                        />
+                    </View>
+                )}
+
                 {/* Uyarı Mesajı */}
                 {isActive && currentMode === TIMER_MODES.POMODORO && (
                     <View style={styles.warningContainer}>
@@ -456,33 +555,58 @@ const TimerScreen = () => {
                 )}
 
                 <View style={styles.controlsContainer}>
-                    {!isActive ? (
+                    {!isActive && timeLeft === totalDuration ? (
+                        // Henüz başlamadıysa
                         <TouchableOpacity style={styles.mainButton} onPress={handleStart}>
                             <Ionicons name="play" size={24} color="white" style={{ marginRight: 10 }} />
                             <Text style={styles.mainButtonText}>Başlat</Text>
                         </TouchableOpacity>
                     ) : (
-                        <View style={styles.activeControls}>
-                            <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: modeInfo.color[1] }]}
-                                onPress={handlePause}
-                            >
-                                <Ionicons name="pause" size={24} color="white" />
-                                <Text style={styles.actionButtonText}>Duraklat</Text>
-                            </TouchableOpacity>
+                        // Başladıysa veya duraklatıldıysa
+                        <View style={styles.activeControlsContainer}>
+                            <View style={styles.activeControls}>
+                                {isActive ? (
+                                    <TouchableOpacity
+                                        style={[styles.actionButton, { backgroundColor: modeInfo.color[1] }]}
+                                        onPress={handlePause}
+                                    >
+                                        <Ionicons name="pause" size={24} color="white" />
+                                        <Text style={styles.actionButtonText}>Duraklat</Text>
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+                                        onPress={handleStart}
+                                    >
+                                        <Ionicons name="play" size={24} color="white" />
+                                        <Text style={styles.actionButtonText}>Devam Et</Text>
+                                    </TouchableOpacity>
+                                )}
 
-                            <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: modeInfo.color[0] }]}
-                                onPress={handleReset}
-                            >
-                                <Ionicons name="stop" size={24} color="white" />
-                                <Text style={styles.actionButtonText}>Bitir</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, { backgroundColor: '#F44336' }]}
+                                    onPress={handleReset}
+                                >
+                                    <Ionicons name="refresh" size={24} color="white" />
+                                    <Text style={styles.actionButtonText}>Sıfırla</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Seansı Bitir ve Kaydet Butonu - Sadece Pomodoro modunda ve zamanlayıcı ilerlediyse */}
+                            {currentMode === TIMER_MODES.POMODORO && timeLeft < totalDuration && (
+                                <TouchableOpacity
+                                    style={styles.saveButton}
+                                    onPress={handleStopAndSave}
+                                >
+                                    <Ionicons name="save" size={20} color="white" style={{ marginRight: 8 }} />
+                                    <Text style={styles.saveButtonText}>Seansı Bitir ve Kaydet</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     )}
 
-                    {/* Süre Ayarlama */}
-                    {!isActive && (
+                    {/* Süre Ayarlama - Sadece zamanlayıcı hiç başlamadıysa */}
+                    {!isActive && timeLeft === totalDuration && (
                         <View style={styles.timeAdjustmentContainer}>
                             <TouchableOpacity style={styles.adjustButton} onPress={() => adjustTime(-5)}>
                                 <Ionicons name="remove" size={20} color={modeInfo.color[0]} />
@@ -539,7 +663,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     headerBackground: {
-        flex: 0.65,
+        flex: 0.55,
         paddingTop: 50,
         paddingHorizontal: 20,
         alignItems: 'center',
@@ -549,7 +673,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         width: '100%',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 15,
     },
     logoContainer: {
         flexDirection: 'row',
@@ -578,7 +702,7 @@ const styles = StyleSheet.create({
     activeCategoryContainer: {
         width: '100%',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 15,
     },
     activeCategoryBadge: {
         flexDirection: 'row',
@@ -605,7 +729,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         borderRadius: 12,
         padding: 4,
-        marginBottom: 15,
+        marginBottom: 10,
         width: '100%',
     },
     modeButton: {
@@ -623,12 +747,35 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     modeButtonTextActive: {
-        color: '#FF6B6B',
+        color: '#333',
+        fontWeight: 'bold',
+    },
+    bottomSection: {
+        flex: 1,
+        backgroundColor: 'white',
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        alignItems: 'center',
+        paddingTop: 0,
+        marginTop: -30,
+    },
+    waveEffect: {
+        position: 'absolute',
+        top: -20,
+        left: 0,
+        right: 0,
+        height: 40,
+        backgroundColor: 'white',
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        opacity: 0.5,
+        transform: [{ scaleX: 1.1 }],
     },
     timerWrapper: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: -CIRCLE_SIZE / 1,
+        marginTop: -CIRCLE_SIZE / 3,
+        marginBottom: 10,
         zIndex: 10,
     },
     timerCircle: {
@@ -640,13 +787,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
         elevation: 10,
     },
     timerTextContainer: {
         position: 'absolute',
         alignItems: 'center',
+        justifyContent: 'center',
     },
     timerValue: {
         fontSize: 56,
@@ -655,9 +803,10 @@ const styles = StyleSheet.create({
         fontVariant: ['tabular-nums'],
     },
     timerLabel: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#999',
         marginTop: 5,
+        fontWeight: '500',
     },
     distractionText: {
         fontSize: 12,
@@ -665,52 +814,48 @@ const styles = StyleSheet.create({
         marginTop: 5,
         fontWeight: '600',
     },
-    bottomSection: {
-        flex: 0.35,
-        backgroundColor: '#f9f9f9',
+    motivationContainer: {
+        width: '100%',
         alignItems: 'center',
-        paddingTop: 40,
-    },
-    waveEffect: {
-        position: 'absolute',
-        top: -30,
-        left: 0,
-        right: 0,
-        height: 60,
-        backgroundColor: '#f9f9f9',
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
+        zIndex: 5,
+        marginTop: 5,
+        minHeight: 40,
+        justifyContent: 'center',
     },
     warningContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        marginTop: 15,
+        backgroundColor: '#FFF3E0',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        borderRadius: 20,
         marginBottom: 10,
-        paddingHorizontal: 20,
+        marginTop: 5,
     },
     warningText: {
+        color: '#FF9800',
         fontSize: 12,
-        color: '#999',
-        textAlign: 'center',
+        marginLeft: 5,
+        fontWeight: '500',
     },
     controlsContainer: {
         width: '100%',
-        paddingHorizontal: 30,
-        marginTop: 10,
-        marginBottom: 20,
+        paddingHorizontal: 40,
+        alignItems: 'center',
+        marginTop: 15,
     },
     mainButton: {
-        backgroundColor: '#FF6B6B',
+        backgroundColor: '#333',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
+        paddingVertical: 18,
+        paddingHorizontal: 40,
         borderRadius: 30,
-        shadowColor: '#FF6B6B',
+        width: '100%',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.2,
         shadowRadius: 10,
         elevation: 5,
     },
@@ -719,12 +864,19 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
+    activeControlsContainer: {
+        width: '100%',
+        alignItems: 'center',
+    },
     activeControls: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        width: '100%',
+        gap: 15,
+        marginBottom: 15,
     },
     actionButton: {
-        flex: 0.48,
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -732,7 +884,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.15,
         shadowRadius: 5,
         elevation: 3,
     },
@@ -740,39 +892,53 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
-        marginLeft: 5,
+        marginLeft: 8,
+    },
+    saveButton: {
+        backgroundColor: '#FF9800',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 20,
+        width: '100%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+        elevation: 3,
+    },
+    saveButtonText: {
+        color: 'white',
+        fontSize: 15,
+        fontWeight: 'bold',
     },
     timeAdjustmentContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 15,
-        gap: 15,
+        marginTop: 10,
+        gap: 20,
     },
     adjustButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'white',
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: '#FF6B6B',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        backgroundColor: '#f5f5f5',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        borderRadius: 15,
     },
     adjustButtonText: {
-        color: '#FF6B6B',
-        fontWeight: 'bold',
-        marginLeft: 5,
         fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 5,
     },
     statsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-around',
         width: '100%',
+        marginTop: 'auto',
+        marginBottom: 30,
         paddingHorizontal: 20,
     },
     statItem: {
@@ -786,7 +952,7 @@ const styles = StyleSheet.create({
     },
     statLabel: {
         fontSize: 12,
-        color: '#666',
+        color: '#999',
         marginTop: 2,
     },
 });
