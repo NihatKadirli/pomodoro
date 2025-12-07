@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,19 +7,21 @@ import { BarChart, PieChart } from 'react-native-chart-kit';
 import { getAllSessions, getTodaySessions, deleteAllSessions } from '../utils/storage';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
+import { useTheme } from '../context/ThemeContext'; // Theme Context Eklendi
 
 const { width } = Dimensions.get('window');
 
-// Kategori Renkleri
+// Kategori Renkleri - Sabit kalabilir veya temaya göre ayarlanabilir
 const CATEGORY_COLORS = {
-    'Ders Çalışma': '#2196F3', // Mavi
-    'Kodlama': '#4CAF50',      // Yeşil
-    'Proje': '#FF9800',        // Turuncu
-    'Kitap Okuma': '#9C27B0',  // Mor
-    'Genel': '#607D8B',        // Gri
+    'Ders Çalışma': '#42A5F5', // Daha parlak mavi
+    'Kodlama': '#66BB6A',      // Daha parlak yeşil
+    'Proje': '#FFA726',        // Daha parlak turuncu
+    'Kitap Okuma': '#AB47BC',  // Daha parlak mor
+    'Genel': '#78909C',        // Daha parlak gri
 };
 
 const ReportsScreen = () => {
+    const { theme } = useTheme(); // Theme Hook
     const [sessions, setSessions] = useState([]);
     const [todaySessions, setTodaySessions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -73,18 +75,16 @@ const ReportsScreen = () => {
         for (let i = 6; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            d.setHours(0, 0, 0, 0); // Günün başlangıcı
+            d.setHours(0, 0, 0, 0);
 
             const nextDay = new Date(d);
-            nextDay.setDate(d.getDate() + 1); // Günün bitişi (ertesi gün başı)
+            nextDay.setDate(d.getDate() + 1);
 
-            // O güne ait seansları filtrele
             const daySessions = allSessions.filter(session => {
                 const sessionDate = new Date(session.date);
                 return sessionDate >= d && sessionDate < nextDay;
             });
 
-            // Toplam süreyi hesapla
             const totalDuration = daySessions.reduce((sum, s) => sum + s.duration, 0);
 
             data.push(totalDuration);
@@ -101,7 +101,6 @@ const ReportsScreen = () => {
     const getCategoryDistribution = (allSessions) => {
         const distribution = {};
 
-        // Kategorilere göre grupla ve süreleri topla
         allSessions.forEach(session => {
             const category = session.category || 'Genel';
             if (!distribution[category]) {
@@ -110,28 +109,24 @@ const ReportsScreen = () => {
             distribution[category] += session.duration;
         });
 
-        // Pie Chart formatına dönüştür
         return Object.keys(distribution)
             .map(category => ({
                 name: category,
                 population: distribution[category],
-                color: CATEGORY_COLORS[category] || '#607D8B', // Tanımsızsa gri
-                legendFontColor: '#7F7F7F',
+                color: CATEGORY_COLORS[category] || theme.colors.subText,
+                legendFontColor: theme.colors.text, // Dinamik text rengi
                 legendFontSize: 12
             }))
-            .filter(item => item.population > 0) // 0 süreli olanları filtrele
-            .sort((a, b) => b.population - a.population); // Büyükten küçüğe sırala
+            .filter(item => item.population > 0)
+            .sort((a, b) => b.population - a.population);
     };
 
-    // Chart verilerini optimize et
     const chartData = useMemo(() => getLast7DaysData(sessions), [sessions]);
-    const pieData = useMemo(() => getCategoryDistribution(sessions), [sessions]);
+    const pieData = useMemo(() => getCategoryDistribution(sessions), [sessions, theme]);
 
-    // Grafikte veri var mı kontrolü
     const hasChartData = chartData.datasets[0].data.some(val => val > 0);
     const hasPieData = pieData.length > 0;
 
-    // Tarih Formatlama
     const formatDate = (isoString) => {
         const date = new Date(isoString);
         const now = new Date();
@@ -147,7 +142,6 @@ const ReportsScreen = () => {
         return `${date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })} ${timeStr}`;
     };
 
-    // Verileri Silme İşlemi
     const handleDeleteAll = () => {
         showAlert({
             title: 'Tüm Verileri Sil',
@@ -160,7 +154,7 @@ const ReportsScreen = () => {
                     onPress: async () => {
                         const success = await deleteAllSessions();
                         if (success) {
-                            loadData(); // Listeyi yenile
+                            loadData();
                         }
                     }
                 }
@@ -168,59 +162,80 @@ const ReportsScreen = () => {
         });
     };
 
+    // Mod Renklerini Belirle (Fallback ile)
+    const modeColors = theme.modes || {
+        pomodoro: theme.gradient,
+        shortBreak: [theme.colors.accent, theme.colors.secondary],
+        longBreak: [theme.colors.secondary, theme.colors.primary]
+    };
+
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#FF6B6B" />
-                <Text style={styles.loadingText}>Veriler yükleniyor...</Text>
+            <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.subText }]}>Veriler yükleniyor...</Text>
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {/* Header Arka Planı */}
+            <LinearGradient
+                colors={theme.gradient}
+                style={styles.headerBackground}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+            >
+                <Text style={styles.headerTitle}>Raporlar</Text>
+            </LinearGradient>
+
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B6B" />
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={theme.colors.primary}
+                        colors={[theme.colors.primary]}
+                        progressBackgroundColor={theme.colors.card}
+                    />
                 }
+                showsVerticalScrollIndicator={false}
             >
-                {/* Başlık */}
-                <Text style={styles.headerTitle}>İstatistikler</Text>
-
                 {/* İstatistik Kartları */}
                 <View style={styles.statsGrid}>
-                    {/* Bugün Kartı */}
+                    {/* Bugün Kartı - Pomodoro Renkleri */}
                     <LinearGradient
-                        colors={['#5a5f77ff', '#a24f4bff']}
+                        colors={modeColors.pomodoro}
                         style={styles.statCard}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                     >
                         <View style={styles.statIconContainer}>
-                            <Ionicons name="calendar" size={24} color="rgba(255,255,255,0.8)" />
+                            <Ionicons name="calendar" size={24} color="rgba(255,255,255,0.9)" />
                         </View>
                         <Text style={styles.statNumber}>{todayTotal}</Text>
                         <Text style={styles.statLabel}>Bugün (dk)</Text>
                     </LinearGradient>
 
-                    {/* Tüm Zamanlar Kartı */}
+                    {/* Tüm Zamanlar Kartı - Long Break Renkleri (Daha oturaklı) */}
                     <LinearGradient
-                        colors={['#c39494ff', '#f5576c']}
+                        colors={modeColors.longBreak}
                         style={styles.statCard}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                     >
                         <View style={styles.statIconContainer}>
-                            <Ionicons name="trophy" size={24} color="rgba(255,255,255,0.8)" />
+                            <Ionicons name="trophy" size={24} color="rgba(255,255,255,0.9)" />
                         </View>
                         <Text style={styles.statNumber}>{allTimeTotal}</Text>
                         <Text style={styles.statLabel}>Toplam (dk)</Text>
                     </LinearGradient>
 
-                    {/* Dikkat Dağınıklığı Kartı */}
+                    {/* Dikkat Dağınıklığı Kartı - Kırmızı Tonları (Sabit veya Modifiye) */}
                     <LinearGradient
-                        colors={['#c21264ff', '#fe1500ff']}
+                        colors={['#FF5252', '#D32F2F']} // Dikkat için her zaman kırmızı iyidir
                         style={[styles.statCard, styles.fullWidthCard]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
@@ -231,15 +246,18 @@ const ReportsScreen = () => {
                                 <Text style={styles.statLabel}>Toplam Dikkat Dağınıklığı</Text>
                             </View>
                             <View style={styles.largeIconContainer}>
-                                <Ionicons name="notifications-off" size={40} color="rgba(255,255,255,0.4)" />
+                                <Ionicons name="notifications-off" size={40} color="rgba(255,255,255,0.3)" />
                             </View>
                         </View>
                     </LinearGradient>
                 </View>
 
                 {/* Son 7 Gün Grafiği */}
-                <View style={styles.chartContainer}>
-                    <Text style={styles.chartTitle}>📊 Son 7 Gün Performansı</Text>
+                <View style={[styles.chartContainer, { backgroundColor: theme.colors.card }]}>
+                    <View style={styles.chartHeader}>
+                        <Ionicons name="bar-chart" size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Haftalık Performans</Text>
+                    </View>
 
                     {hasChartData ? (
                         <BarChart
@@ -249,18 +267,20 @@ const ReportsScreen = () => {
                             yAxisLabel=""
                             yAxisSuffix=" dk"
                             chartConfig={{
-                                backgroundColor: '#ffffff',
-                                backgroundGradientFrom: '#ffffff',
-                                backgroundGradientTo: '#ffffff',
+                                backgroundColor: theme.colors.card,
+                                backgroundGradientFrom: theme.colors.card,
+                                backgroundGradientTo: theme.colors.card,
                                 decimalPlaces: 0,
-                                color: (opacity = 1) => `rgba(255, 107, 107, ${opacity})`,
-                                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                color: (opacity = 1) => theme.id === 'dark'
+                                    ? `rgba(255, 255, 255, ${opacity})` // Dark mode'da beyaz barlar daha iyi görünür
+                                    : `rgba(${parseInt(theme.colors.primary.slice(1, 3), 16)}, ${parseInt(theme.colors.primary.slice(3, 5), 16)}, ${parseInt(theme.colors.primary.slice(5, 7), 16)}, ${opacity})`,
+                                labelColor: (opacity = 1) => theme.colors.text, // Dinamik text rengi
                                 style: {
                                     borderRadius: 16
                                 },
                                 propsForBackgroundLines: {
                                     strokeDasharray: '',
-                                    stroke: '#f0f0f0',
+                                    stroke: theme.colors.border,
                                     strokeWidth: 1
                                 },
                                 propsForLabels: {
@@ -280,15 +300,18 @@ const ReportsScreen = () => {
                         />
                     ) : (
                         <View style={styles.noDataContainer}>
-                            <Ionicons name="stats-chart" size={48} color="#eee" />
-                            <Text style={styles.noDataText}>Son 7 günde seans kaydı bulunmuyor</Text>
+                            <Ionicons name="stats-chart" size={48} color={theme.colors.border} />
+                            <Text style={[styles.noDataText, { color: theme.colors.subText }]}>Son 7 günde veri yok</Text>
                         </View>
                     )}
                 </View>
 
                 {/* Kategori Dağılımı Pie Chart */}
-                <View style={styles.chartContainer}>
-                    <Text style={styles.chartTitle}>🎯 Kategori Dağılımı</Text>
+                <View style={[styles.chartContainer, { backgroundColor: theme.colors.card }]}>
+                    <View style={styles.chartHeader}>
+                        <Ionicons name="pie-chart" size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Kategori Dağılımı</Text>
+                    </View>
 
                     {hasPieData ? (
                         <>
@@ -297,8 +320,8 @@ const ReportsScreen = () => {
                                 width={width - 40}
                                 height={220}
                                 chartConfig={{
-                                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                    color: (opacity = 1) => theme.colors.text,
+                                    labelColor: (opacity = 1) => theme.colors.text,
                                 }}
                                 accessor="population"
                                 backgroundColor="transparent"
@@ -311,71 +334,70 @@ const ReportsScreen = () => {
                                     borderRadius: 16
                                 }}
                             />
-                            <View style={styles.totalTimeContainer}>
-                                <Text style={styles.totalTimeText}>
-                                    Toplam Odaklanma: <Text style={styles.boldText}>{allTimeTotal} dk</Text>
+                            <View style={[styles.totalTimeContainer, { borderTopColor: theme.colors.border }]}>
+                                <Text style={[styles.totalTimeText, { color: theme.colors.subText }]}>
+                                    Toplam Odaklanma: <Text style={[styles.boldText, { color: theme.colors.text }]}>{allTimeTotal} dk</Text>
                                 </Text>
                             </View>
                         </>
                     ) : (
                         <View style={styles.noDataContainer}>
-                            <Ionicons name="pie-chart" size={48} color="#eee" />
-                            <Text style={styles.noDataText}>Henüz kategori verisi bulunmuyor</Text>
+                            <Ionicons name="pie-chart" size={48} color={theme.colors.border} />
+                            <Text style={[styles.noDataText, { color: theme.colors.subText }]}>Henüz kategori verisi yok</Text>
                         </View>
                     )}
                 </View>
 
                 {/* Son Seanslar Başlığı */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>📋 Son Seanslar</Text>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>📋 Son Seanslar</Text>
                     {sessions.length > 0 && (
-                        <Text style={styles.sectionSubtitle}>Son 5 Kayıt</Text>
+                        <Text style={[styles.sectionSubtitle, { color: theme.colors.subText }]}>Son 5 Kayıt</Text>
                     )}
                 </View>
 
                 {/* Seans Listesi */}
                 {sessions.length === 0 ? (
-                    // Boş Durum
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="bar-chart-outline" size={80} color="#ddd" />
-                        <Text style={styles.emptyTitle}>Henüz Veri Yok</Text>
-                        <Text style={styles.emptySubtitle}>
+                    <View style={[styles.emptyContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                        <Ionicons name="bar-chart-outline" size={80} color={theme.colors.border} />
+                        <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>Henüz Veri Yok</Text>
+                        <Text style={[styles.emptySubtitle, { color: theme.colors.subText }]}>
                             Zamanlayıcıyı kullanarak ilk odaklanma seansını başlat! 💪
                         </Text>
                     </View>
                 ) : (
-                    // Liste
                     <View style={styles.listContainer}>
                         {sessions.slice(0, 5).map((session) => (
-                            <View key={session.id} style={styles.sessionCard}>
+                            <View key={session.id} style={[styles.sessionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
                                 <View style={styles.sessionHeader}>
-                                    <View style={styles.categoryBadge}>
-                                        <Ionicons name="pricetag" size={14} color="#666" style={{ marginRight: 4 }} />
-                                        <Text style={styles.categoryText}>{session.category}</Text>
+                                    <View style={[styles.categoryBadge, { backgroundColor: theme.colors.border + '40' }]}>
+                                        {/* Kategori ikonu eklenebilir ama şu an text */}
+                                        <Ionicons name="pricetag" size={14} color={theme.colors.subText} style={{ marginRight: 4 }} />
+                                        <Text style={[styles.categoryText, { color: theme.colors.text }]}>{session.category}</Text>
                                     </View>
-                                    <Text style={styles.dateText}>{formatDate(session.date)}</Text>
+                                    <Text style={[styles.dateText, { color: theme.colors.subText }]}>{formatDate(session.date)}</Text>
                                 </View>
 
                                 <View style={styles.sessionDetails}>
                                     <View style={styles.detailItem}>
-                                        <Ionicons name="time-outline" size={18} color="#FF6B6B" />
-                                        <Text style={styles.detailText}>
-                                            <Text style={styles.boldText}>{session.duration}</Text> dk
+                                        <Ionicons name="time-outline" size={18} color={theme.colors.primary} />
+                                        <Text style={[styles.detailText, { color: theme.colors.subText }]}>
+                                            <Text style={[styles.boldText, { color: theme.colors.text }]}>{session.duration}</Text> dk
                                         </Text>
                                     </View>
 
-                                    <View style={styles.divider} />
+                                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
 
                                     <View style={styles.detailItem}>
-                                        <Ionicons name="alert-circle-outline" size={18} color={session.distractionCount > 0 ? "#F44336" : "#4CAF50"} />
-                                        <Text style={[styles.detailText, session.distractionCount > 0 && { color: '#F44336' }]}>
-                                            <Text style={styles.boldText}>{session.distractionCount}</Text> dikkat
+                                        <Ionicons name="alert-circle-outline" size={18} color={session.distractionCount > 0 ? "#F44336" : theme.colors.accent} />
+                                        <Text style={[styles.detailText, session.distractionCount > 0 && { color: '#F44336' }, { color: theme.colors.subText }]}>
+                                            <Text style={[styles.boldText, { color: session.distractionCount > 0 ? '#F44336' : theme.colors.text }]}>{session.distractionCount}</Text> dikkat
                                         </Text>
                                     </View>
                                 </View>
 
                                 {!session.completed && (
-                                    <View style={styles.incompleteBadge}>
+                                    <View style={[styles.incompleteBadge, { backgroundColor: '#FFF3E0' }]}>
                                         <Text style={styles.incompleteText}>Erken Sonlandırıldı</Text>
                                     </View>
                                 )}
@@ -386,7 +408,10 @@ const ReportsScreen = () => {
 
                 {/* Verileri Sil Butonu */}
                 {sessions.length > 0 && (
-                    <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAll}>
+                    <TouchableOpacity
+                        style={[styles.deleteButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                        onPress={handleDeleteAll}
+                    >
                         <Ionicons name="trash-outline" size={20} color="#F44336" style={{ marginRight: 8 }} />
                         <Text style={styles.deleteButtonText}>Tüm Verileri Sil</Text>
                     </TouchableOpacity>
@@ -412,28 +437,33 @@ const ReportsScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f8f9fa',
     },
     loadingText: {
         marginTop: 10,
-        color: '#666',
         fontSize: 16,
     },
-    scrollContent: {
-        padding: 20,
+    headerBackground: {
         paddingTop: 60,
+        paddingBottom: 20,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        marginBottom: -30, // ScrollView'ın içine girmesi için
+        zIndex: 10,
     },
     headerTitle: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 20,
+        color: '#fff',
+    },
+    scrollContent: {
+        padding: 20,
+        paddingTop: 40, // Header üstte olduğu için padding azalttık
     },
     statsGrid: {
         flexDirection: 'row',
@@ -495,7 +525,6 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     chartContainer: {
-        backgroundColor: 'white',
         borderRadius: 20,
         padding: 20,
         marginBottom: 30,
@@ -506,12 +535,15 @@ const styles = StyleSheet.create({
         elevation: 3,
         alignItems: 'center',
     },
+    chartHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        marginBottom: 15,
+    },
     chartTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 15,
-        alignSelf: 'flex-start',
     },
     noDataContainer: {
         height: 150,
@@ -521,20 +553,17 @@ const styles = StyleSheet.create({
     },
     noDataText: {
         marginTop: 10,
-        color: '#999',
         fontSize: 14,
     },
     totalTimeContainer: {
         marginTop: 15,
         paddingTop: 15,
         borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
         width: '100%',
         alignItems: 'center',
     },
     totalTimeText: {
         fontSize: 14,
-        color: '#666',
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -545,17 +574,14 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
     },
     sectionSubtitle: {
         fontSize: 14,
-        color: '#999',
     },
     listContainer: {
         marginBottom: 20,
     },
     sessionCard: {
-        backgroundColor: 'white',
         borderRadius: 16,
         padding: 16,
         marginBottom: 12,
@@ -565,7 +591,6 @@ const styles = StyleSheet.create({
         shadowRadius: 5,
         elevation: 2,
         borderWidth: 1,
-        borderColor: '#f0f0f0',
     },
     sessionHeader: {
         flexDirection: 'row',
@@ -576,7 +601,6 @@ const styles = StyleSheet.create({
     categoryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f5f5f5',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 8,
@@ -584,11 +608,9 @@ const styles = StyleSheet.create({
     categoryText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#333',
     },
     dateText: {
         fontSize: 12,
-        color: '#999',
     },
     sessionDetails: {
         flexDirection: 'row',
@@ -600,22 +622,18 @@ const styles = StyleSheet.create({
     },
     detailText: {
         fontSize: 15,
-        color: '#555',
         marginLeft: 6,
     },
     boldText: {
         fontWeight: 'bold',
-        color: '#333',
     },
     divider: {
         width: 1,
         height: 16,
-        backgroundColor: '#eee',
         marginHorizontal: 15,
     },
     incompleteBadge: {
         marginTop: 10,
-        backgroundColor: '#FFF3E0',
         paddingVertical: 4,
         paddingHorizontal: 8,
         borderRadius: 4,
@@ -630,22 +648,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 50,
-        backgroundColor: 'white',
         borderRadius: 20,
         borderStyle: 'dashed',
         borderWidth: 2,
-        borderColor: '#eee',
     },
     emptyTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
         marginTop: 20,
         marginBottom: 10,
     },
     emptySubtitle: {
         fontSize: 16,
-        color: '#999',
         textAlign: 'center',
         paddingHorizontal: 40,
         lineHeight: 24,
@@ -657,9 +671,7 @@ const styles = StyleSheet.create({
         padding: 15,
         marginTop: 10,
         borderWidth: 1,
-        borderColor: '#ffebee',
         borderRadius: 12,
-        backgroundColor: '#fff',
     },
     deleteButtonText: {
         color: '#F44336',

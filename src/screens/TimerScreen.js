@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Vibration, AppState } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Vibration, AppState, Modal, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { useSettings } from '../context/SettingsContext';
+import { useTheme } from '../context/ThemeContext';
+import { usePet } from '../context/PetContext';
 import CustomAlert from '../components/CustomAlert';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import { saveSession } from '../utils/storage';
 import MotivationBanner from '../components/MotivationBanner';
-import MotivationToast from '../components/MotivationToast';
-import { MOTIVATION_MESSAGES } from '../constants/motivationMessages';
-
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.65;
@@ -26,7 +25,9 @@ const TIMER_MODES = {
 };
 
 const TimerScreen = () => {
-    const { settings, activeCategory } = useSettings();
+    const { settings, activeCategory, categories, changeActiveCategory } = useSettings();
+    const { theme } = useTheme();
+    const { addSessionReward } = usePet();
     const { showAlert, hideAlert, alertConfig } = useCustomAlert();
 
     // State
@@ -36,11 +37,7 @@ const TimerScreen = () => {
     const [currentMode, setCurrentMode] = useState(TIMER_MODES.POMODORO);
     const [completedPomodoros, setCompletedPomodoros] = useState(0);
     const [totalDuration, setTotalDuration] = useState(settings.pomodoroMinutes * 60);
-
-    // Toast Notification State
-    const [toastVisible, setToastVisible] = useState(false);
-    const [toastMessage, setToastMessage] = useState(null);
-
+    const [categoryModalVisible, setCategoryModalVisible] = useState(false);
 
     // AppState referansı - Uygulama durumunu takip için
     const appState = useRef(AppState.currentState);
@@ -73,7 +70,7 @@ const TimerScreen = () => {
             const isPomodoroMode = currentModeRef.current === TIMER_MODES.POMODORO;
 
             if (isPomodoroMode) {
-                // Background'a geçiş (active → background/inactive) VE timer çalışıyorsa
+                // Background'a geçiş
                 if (
                     appState.current === 'active' &&
                     (nextAppState === 'background' || nextAppState === 'inactive') &&
@@ -85,16 +82,15 @@ const TimerScreen = () => {
                     wasInterruptedRef.current = true;
                 }
 
-                // Active'e dönüş (background → active) VE kesinti varsa
+                // Active'e dönüş
                 if (
                     (appState.current === 'background' || appState.current === 'inactive') &&
                     nextAppState === 'active' &&
                     wasInterruptedRef.current
                 ) {
-                    console.log('✅ Kullanıcı geri döndü - Custom Alert gösteriliyor');
+                    console.log('✅ Kullanıcı geri döndü');
                     wasInterruptedRef.current = false;
 
-                    // Custom Alert göster
                     setTimeout(() => {
                         showAlert({
                             title: 'Geri Döndünüz!',
@@ -104,16 +100,11 @@ const TimerScreen = () => {
                                 {
                                     text: 'Hayır',
                                     style: 'cancel',
-                                    onPress: () => {
-                                        console.log('❌ Kullanıcı devam etmek istemedi');
-                                    }
+                                    onPress: () => console.log('❌ İptal')
                                 },
                                 {
                                     text: 'Evet',
-                                    onPress: () => {
-                                        console.log('✅ Kullanıcı devam etmek istedi');
-                                        setIsActive(true);
-                                    }
+                                    onPress: () => setIsActive(true)
                                 }
                             ]
                         });
@@ -124,7 +115,6 @@ const TimerScreen = () => {
             appState.current = nextAppState;
         });
 
-        // Cleanup - Memory leak önleme
         return () => {
             subscription.remove();
         };
@@ -356,6 +346,13 @@ const TimerScreen = () => {
         }
     };
 
+    // Kategori Seçimi
+    const handleCategorySelect = (category) => {
+        changeActiveCategory(category);
+        setCategoryModalVisible(false);
+    };
+
+
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -366,34 +363,42 @@ const TimerScreen = () => {
     const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
 
     // Mod bilgileri
+    // Mod bilgileri
     const getModeInfo = () => {
+        // Eğer tema dosyasında modes tanımlı değilse (eski versiyon kalmışsa) graceful fallback yapalım
+        const modeColors = theme.modes || {
+            pomodoro: theme.gradient,
+            shortBreak: [theme.colors.accent, theme.colors.secondary],
+            longBreak: [theme.colors.secondary, theme.colors.primary]
+        };
+
         switch (currentMode) {
             case TIMER_MODES.POMODORO:
                 return {
                     title: 'Pomodoro',
                     icon: '🍅',
-                    color: ['#FF6B6B', '#FF8E53'],
+                    color: modeColors.pomodoro,
                     label: isActive ? 'Odaklanılıyor' : 'Hazır mısın?',
                 };
             case TIMER_MODES.SHORT_BREAK:
                 return {
                     title: 'Kısa Mola',
                     icon: '☕',
-                    color: ['#4ECDC4', '#44A08D'],
+                    color: modeColors.shortBreak,
                     label: isActive ? 'Mola Veriliyor' : 'Dinlen',
                 };
             case TIMER_MODES.LONG_BREAK:
                 return {
                     title: 'Uzun Mola',
                     icon: '🌴',
-                    color: ['#667eea', '#764ba2'],
+                    color: modeColors.longBreak,
                     label: isActive ? 'İyi Dinlenmeler' : 'Uzun Mola',
                 };
             default:
                 return {
                     title: 'Pomodoro',
                     icon: '🍅',
-                    color: ['#FF6B6B', '#FF8E53'],
+                    color: modeColors.pomodoro,
                     label: 'Hazır mısın?',
                 };
         }
@@ -402,7 +407,7 @@ const TimerScreen = () => {
     const modeInfo = getModeInfo();
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <LinearGradient colors={modeInfo.color} style={styles.headerBackground}>
                 <View style={styles.header}>
                     <View style={styles.logoContainer}>
@@ -416,20 +421,26 @@ const TimerScreen = () => {
                     </View>
                 </View>
 
-                {/* Aktif Kategori Göstergesi */}
-                <View style={styles.activeCategoryContainer}>
+                {/* Aktif Kategori Göstergesi - Tıklanabilir */}
+                <TouchableOpacity
+                    style={styles.activeCategoryContainer}
+                    onPress={() => setCategoryModalVisible(true)}
+                    activeOpacity={0.7}
+                >
                     {activeCategory ? (
                         <View style={styles.activeCategoryBadge}>
                             <Text style={styles.activeCategoryIcon}>{activeCategory.icon}</Text>
                             <Text style={styles.activeCategoryText}>{activeCategory.name}</Text>
+                            <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.8)" style={{ marginLeft: 4 }} />
                         </View>
                     ) : (
                         <View style={[styles.activeCategoryBadge, styles.noCategoryBadge]}>
                             <Ionicons name="alert-circle-outline" size={16} color="rgba(255,255,255,0.8)" />
-                            <Text style={styles.activeCategoryText}>Kategori Seçilmedi</Text>
+                            <Text style={styles.activeCategoryText}>Kategori Seç</Text>
+                            <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.8)" style={{ marginLeft: 4 }} />
                         </View>
                     )}
-                </View>
+                </TouchableOpacity>
 
                 {/* Mod Seçici */}
                 <View style={styles.modeSelector}>
@@ -487,12 +498,13 @@ const TimerScreen = () => {
                 </View>
             </LinearGradient>
 
-            <View style={styles.bottomSection}>
-                <View style={styles.waveEffect} />
+            {/* Alt Kısım */}
+            <View style={[styles.bottomSection, { backgroundColor: theme.colors.background }]}>
+                <View style={[styles.waveEffect, { backgroundColor: theme.colors.background }]} />
 
                 {/* Timer */}
                 <View style={styles.timerWrapper}>
-                    <View style={styles.timerCircle}>
+                    <View style={[styles.timerCircle, { backgroundColor: theme.colors.card }]}>
                         <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE}>
                             <Defs>
                                 <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
@@ -504,7 +516,7 @@ const TimerScreen = () => {
                                 cx={CIRCLE_SIZE / 2}
                                 cy={CIRCLE_SIZE / 2}
                                 r={RADIUS}
-                                stroke="#f0f0f0"
+                                stroke={theme.colors.border}
                                 strokeWidth={STROKE_WIDTH}
                                 fill="transparent"
                             />
@@ -524,8 +536,8 @@ const TimerScreen = () => {
                         </Svg>
 
                         <View style={styles.timerTextContainer}>
-                            <Text style={styles.timerValue}>{formatTime(timeLeft)}</Text>
-                            <Text style={styles.timerLabel}>{modeInfo.label}</Text>
+                            <Text style={[styles.timerValue, { color: theme.colors.text }]}>{formatTime(timeLeft)}</Text>
+                            <Text style={[styles.timerLabel, { color: theme.colors.subText }]}>{modeInfo.label}</Text>
                             {currentMode === TIMER_MODES.POMODORO && distractionCount > 0 && (
                                 <Text style={styles.distractionText}>⚠️ {distractionCount} dikkat dağınıklığı</Text>
                             )}
@@ -557,7 +569,7 @@ const TimerScreen = () => {
                 <View style={styles.controlsContainer}>
                     {!isActive && timeLeft === totalDuration ? (
                         // Henüz başlamadıysa
-                        <TouchableOpacity style={styles.mainButton} onPress={handleStart}>
+                        <TouchableOpacity style={[styles.mainButton, { backgroundColor: theme.colors.primary }]} onPress={handleStart}>
                             <Ionicons name="play" size={24} color="white" style={{ marginRight: 10 }} />
                             <Text style={styles.mainButtonText}>Başlat</Text>
                         </TouchableOpacity>
@@ -624,21 +636,21 @@ const TimerScreen = () => {
                 {/* İstatistikler */}
                 <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
-                        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                        <Text style={styles.statValue}>{completedPomodoros}</Text>
-                        <Text style={styles.statLabel}>Tamamlanan</Text>
+                        <Ionicons name="checkmark-circle" size={24} color={theme.colors.accent} />
+                        <Text style={[styles.statValue, { color: theme.colors.text }]}>{completedPomodoros}</Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.subText }]}>Tamamlanan</Text>
                     </View>
                     <View style={styles.statItem}>
-                        <Ionicons name="timer" size={24} color="#FF9800" />
-                        <Text style={styles.statValue}>{settings.pomodoroMinutes}</Text>
-                        <Text style={styles.statLabel}>Dakika</Text>
+                        <Ionicons name="timer" size={24} color={theme.colors.primary} />
+                        <Text style={[styles.statValue, { color: theme.colors.text }]}>{settings.pomodoroMinutes}</Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.subText }]}>Dakika</Text>
                     </View>
                     <View style={styles.statItem}>
-                        <Ionicons name="alert-circle" size={24} color={distractionCount > 0 ? "#F44336" : "#999"} />
-                        <Text style={[styles.statValue, distractionCount > 0 && { color: '#F44336' }]}>
+                        <Ionicons name="alert-circle" size={24} color={distractionCount > 0 ? "#F44336" : theme.colors.subText} />
+                        <Text style={[styles.statValue, distractionCount > 0 ? { color: '#F44336' } : { color: theme.colors.text }]}>
                             {distractionCount}
                         </Text>
-                        <Text style={styles.statLabel}>Dikkat Dağınıklığı</Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.subText }]}>Dikkat Dağınıklığı</Text>
                     </View>
                 </View>
             </View>
@@ -653,6 +665,55 @@ const TimerScreen = () => {
                 icon={alertConfig.icon}
                 type={alertConfig.type}
             />
+
+            {/* Kategori Seçim Modal */}
+            <Modal
+                visible={categoryModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setCategoryModalVisible(false)}
+            >
+                <View style={styles.categoryModalOverlay}>
+                    <View style={[styles.categoryModalContent, { backgroundColor: theme.colors.card }]}>
+                        <View style={styles.categoryModalHeader}>
+                            <Text style={[styles.categoryModalTitle, { color: theme.colors.text }]}>Kategori Seç</Text>
+                            <TouchableOpacity
+                                onPress={() => setCategoryModalVisible(false)}
+                                style={styles.categoryModalClose}
+                            >
+                                <Ionicons name="close" size={28} color={theme.colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.categoryList} showsVerticalScrollIndicator={false}>
+                            {categories.map((category, index) => (
+                                <TouchableOpacity
+                                    key={category.id}
+                                    style={[
+                                        styles.categoryModalItem,
+                                        activeCategory?.id === category.id && (
+                                            theme.id === 'dark' ?
+                                                { backgroundColor: 'rgba(255,255,255,0.1)', borderBottomWidth: 0 } :
+                                                styles.categoryModalItemActive
+                                        ),
+                                        index === categories.length - 1 && { borderBottomWidth: 0 },
+                                        { borderBottomColor: theme.colors.border }
+                                    ]}
+                                    onPress={() => handleCategorySelect(category)}
+                                >
+                                    <View style={styles.categoryModalItemLeft}>
+                                        <Text style={styles.categoryModalEmoji}>{category.icon}</Text>
+                                        <Text style={[styles.categoryModalName, { color: theme.colors.text }]}>{category.name}</Text>
+                                    </View>
+                                    {activeCategory?.id === category.id && (
+                                        <Ionicons name="checkmark-circle" size={24} color={theme.colors.accent} />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -842,7 +903,7 @@ const styles = StyleSheet.create({
         width: '100%',
         paddingHorizontal: 40,
         alignItems: 'center',
-        marginTop: 15,
+        marginTop: 5,
     },
     mainButton: {
         backgroundColor: '#333',
@@ -917,7 +978,7 @@ const styles = StyleSheet.create({
     timeAdjustmentContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 10,
+        marginTop: 20,
         gap: 20,
     },
     adjustButton: {
@@ -954,6 +1015,64 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
         marginTop: 2,
+    },
+    // Kategori Modalı Stilleri
+    categoryModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    categoryModalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 25,
+        borderTopRightRadius: 25,
+        padding: 20,
+        maxHeight: '70%',
+    },
+    categoryModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingHorizontal: 10,
+    },
+    categoryModalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    categoryModalClose: {
+        padding: 5,
+    },
+    categoryList: {
+        maxHeight: 400,
+    },
+    categoryModalItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+        borderRadius: 12,
+        marginBottom: 8,
+    },
+    categoryModalItemActive: {
+        backgroundColor: '#F0FFF4',
+        borderBottomWidth: 0,
+    },
+    categoryModalItemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    categoryModalEmoji: {
+        fontSize: 24,
+    },
+    categoryModalName: {
+        fontSize: 16,
+        color: '#333',
+        fontWeight: '500',
     },
 });
 
