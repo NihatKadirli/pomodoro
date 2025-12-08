@@ -9,6 +9,8 @@ import { View, ActivityIndicator } from 'react-native';
 
 // Context
 import { SettingsProvider } from './src/context/SettingsContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { PetProvider } from './src/context/PetContext';
 
 // Ekranlar
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -17,12 +19,16 @@ import OTPScreen from './src/screens/OTPScreen';
 import TimerScreen from './src/screens/TimerScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import PetScreen from './src/screens/PetScreen';
+
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Ana Uygulama (Tab Navigator)
 function MainApp() {
+  const { theme } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -33,19 +39,26 @@ function MainApp() {
             iconName = focused ? 'timer' : 'timer-outline';
           } else if (route.name === 'Raporlar') {
             iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+          } else if (route.name === 'Pet') {
+            iconName = focused ? 'paw' : 'paw-outline';
           } else if (route.name === 'Ayarlar') {
             iconName = focused ? 'settings' : 'settings-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#FF6347',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.subText,
+        tabBarStyle: {
+          backgroundColor: theme.colors.card,
+          borderTopColor: theme.colors.border,
+        },
         headerShown: false,
       })}
     >
       <Tab.Screen name="Zamanlayıcı" component={TimerScreen} />
       <Tab.Screen name="Raporlar" component={ReportsScreen} />
+      <Tab.Screen name="Pet" component={PetScreen} />
       <Tab.Screen name="Ayarlar" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -60,7 +73,7 @@ export default function App() {
   }, []);
 
   const checkLoginStatus = async () => {
-    // Her zaman Onboarding ile başla
+    // Bekleme süresi kaldırıldı
     setInitialRoute('Onboarding');
     setIsLoading(false);
   };
@@ -75,15 +88,18 @@ export default function App() {
 
   return (
     <SettingsProvider>
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="OTP" component={OTPScreen} />
-          <Stack.Screen name="MainApp" component={MainApp} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <ThemeProvider>
+        <PetProvider>
+          <NavigationContainer>
+            <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="OTP" component={OTPScreen} />
+              <Stack.Screen name="MainApp" component={MainApp} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </PetProvider>
+      </ThemeProvider>
     </SettingsProvider>
   );
 }

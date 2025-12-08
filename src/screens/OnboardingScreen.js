@@ -1,31 +1,38 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, Animated, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
 const slides = [
     {
         id: '1',
-        title: 'En İyi Pomodoro Üretkenlik Asistanınız',
-        description: 'SaüPomodoro, yolda kalmanıza, görevleri yönetmenize ve verimli çalışmanıza yardımcı olur. Şimdi SaüPomodoro ile başlayalım!',
-        icon: 'timer-outline',
+        title: 'Greeting',
         isSplash: true,
+        icon: 'hourglass',
     },
     {
         id: '2',
-        title: 'Zahmetsiz Organizasyon - Hepsi Bir Arada',
-        description: 'SaüPomodoro\'nun sezgisel proje ve etiket sistemi ile çalışmalarınızı kolayca kategorize edin, düzenli kalın ve görevlerin üstesinden gelin.',
-        image: require('../../assets/icon.png'), // Placeholder for mockup
-        icon: 'folder-open-outline',
+        title: 'Odaklan ve Başar',
+        description: 'Pomodoro tekniği ile çalışmalarını 25 dakikalık odak seanslarına böl. Dikkatin dağılmadan, maksimum verimle hedeflerine ulaş.',
+        icon: 'timer-outline',
+        color: '#FF6B6B',
     },
     {
         id: '3',
-        title: 'İlerlemenizi Takip Edin & Başarınızı Görselleştirin',
-        description: 'Üretkenliğinizi zaman içinde takip edin, içgörüler kazanın ve verimliliğinizi artırın. Hedeflerinize ulaşma zamanı.',
-        icon: 'stats-chart-outline',
+        title: 'Eğlenceli Üretkenlik',
+        description: 'Sadece çalışmakla kalma, her tamamladığın görevle sanal arkadaşını besle ve büyüt. Başarılarını sevimli bir yol arkadaşıyla kutla!',
+        icon: 'game-controller-outline', // veya paw-outline
+        color: '#4ECDC4',
+    },
+    {
+        id: '4',
+        title: 'Gelişimini Takip Et',
+        description: 'Detaylı grafikler ve raporlarla çalışma alışkanlıklarını analiz et. Hangi saatlerde daha verimlisin, ne kadar yol kat ettin hepsini gör.',
+        icon: 'analytics-outline',
+        color: '#A8DADC', // veya daha koyu bir renk #457B9D
     },
 ];
 
@@ -33,38 +40,47 @@ const OnboardingScreen = ({ navigation }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(50)).current; // Metin animasyonu için
 
-    // Splash ekranı için otomatik geçiş
+    // Splash ekranı yönetimi
     useEffect(() => {
         if (currentIndex === 0) {
+            // Logo görünürlüğü
             Animated.timing(fadeAnim, {
                 toValue: 1,
                 duration: 1000,
                 useNativeDriver: true,
             }).start();
 
+            // Otomatik geçiş
             const timer = setTimeout(() => {
                 if (flatListRef.current) {
                     flatListRef.current.scrollToIndex({ index: 1, animated: true });
                 }
-            }, 2500);
+            }, 2000);
             return () => clearTimeout(timer);
+        } else {
+            // Her slayt değişiminde metin animasyonunu tetikle
+            slideAnim.setValue(50);
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+            }).start();
         }
-    }, []);
+    }, [currentIndex]);
 
     const handleScroll = (event) => {
         const contentOffsetX = event.nativeEvent.contentOffset.x;
         const index = Math.round(contentOffsetX / width);
-        setCurrentIndex(index);
+        if (index !== currentIndex) {
+            setCurrentIndex(index);
+        }
     };
 
     const handleCompleteOnboarding = async () => {
-        // AsyncStorage kaydı kaldırıldı, her seferinde gösterilecek
         navigation.replace('Login');
-    };
-
-    const handleSkip = () => {
-        handleCompleteOnboarding();
     };
 
     const handleNext = () => {
@@ -76,40 +92,51 @@ const OnboardingScreen = ({ navigation }) => {
     };
 
     const renderItem = ({ item, index }) => {
-        // İlk slayt (Splash benzeri)
+        // --- SPLASH SLIDE ---
         if (item.isSplash) {
             return (
-                <LinearGradient
-                    colors={['#FF6B6B', '#FF8E53']}
-                    style={[styles.slide, { justifyContent: 'center' }]}
-                >
-                    <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
-                        <Ionicons name={item.icon} size={120} color="white" />
-                        <Text style={styles.splashTitle}>SaüPomodoro</Text>
-                        <View style={styles.loadingContainer}>
-                            {/* Basit bir loading indikatörü simülasyonu */}
-                            <View style={styles.loadingDot} />
-                        </View>
-                    </Animated.View>
-                </LinearGradient>
+                <View style={{ width, height }}>
+                    <LinearGradient
+                        colors={['#FF6B6B', '#FF8E53']}
+                        style={[styles.fullScreenCenter]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
+                        <StatusBar barStyle="light-content" />
+                        <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
+                            <View style={styles.splashIconContainer}>
+                                <Ionicons name="timer" size={80} color="#FF6B6B" />
+                            </View>
+                            <Text style={styles.splashTitle}>SaüPomodoro</Text>
+                            <Text style={styles.splashSubtitle}>Odaklan. Üret. Kazan.</Text>
+                        </Animated.View>
+                    </LinearGradient>
+                </View>
             );
         }
 
-        // Diğer slaytlar (Walkthrough)
+        // --- INFO SLIDES ---
         return (
-            <View style={styles.slide}>
-                <View style={styles.mockupContainer}>
-                    <View style={styles.mockup}>
-                        {/* Mockup temsili görsel */}
-                        <LinearGradient colors={['#f0f0f0', '#e0e0e0']} style={styles.mockupScreen}>
-                            <Ionicons name={item.icon} size={80} color="#FF6B6B" />
-                        </LinearGradient>
+            <View style={styles.slideContainer}>
+                {/* Üst Kısım: Görsel/İkon Alanı */}
+                <View style={styles.visualContainer}>
+                    <LinearGradient
+                        colors={[item.color, '#fff']}
+                        style={styles.circleBackground}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                    />
+                    <View style={[styles.iconCircle, { shadowColor: item.color }]}>
+                        <Ionicons name={item.icon} size={100} color={item.color} />
                     </View>
                 </View>
 
-                <View style={styles.contentContainer}>
-                    <Text style={styles.title}>{item.title}</Text>
-                    <Text style={styles.description}>{item.description}</Text>
+                {/* Alt Kısım: Metin Alanı */}
+                <View style={styles.textContainer}>
+                    <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
+                        <Text style={styles.title}>{item.title}</Text>
+                        <Text style={styles.description}>{item.description}</Text>
+                    </Animated.View>
                 </View>
             </View>
         );
@@ -127,42 +154,54 @@ const OnboardingScreen = ({ navigation }) => {
                 onMomentumScrollEnd={handleScroll}
                 keyExtractor={(item) => item.id}
                 bounces={false}
+                scrollEnabled={currentIndex !== 0} // Splash sırasında kaydırmayı engelle
             />
 
-            {/* Kontroller (Sadece Splash olmayan ekranlarda göster) */}
+            {/* Pagination ve Butonlar (Splash haricinde göster) */}
             {currentIndex > 0 && (
-                <View style={styles.footer}>
+                <View style={styles.footerContainer}>
                     {/* Pagination Dots */}
                     <View style={styles.pagination}>
-                        {slides.map((_, index) => (
-                            // İlk slayt splash olduğu için pagination'da göstermeyebiliriz veya hepsini gösterebiliriz.
-                            // Tasarımda 3 nokta var, biz 1. slaytı splash gibi kullandık ama yine de dahil edelim.
-                            index > 0 && (
-                                <View
+                        {slides.map((_, index) => {
+                            if (index === 0) return null; // Splash için dot yok
+                            return (
+                                <Animated.View
                                     key={index}
                                     style={[
                                         styles.dot,
-                                        currentIndex === index ? styles.activeDot : styles.inactiveDot,
+                                        {
+                                            backgroundColor: currentIndex === index ? slides[index].color : '#E0E0E0',
+                                            width: currentIndex === index ? 24 : 8,
+                                        }
                                     ]}
                                 />
-                            )
-                        ))}
+                            );
+                        })}
                     </View>
 
-                    <View style={styles.buttonContainer}>
-                        {currentIndex < slides.length - 1 ? (
-                            <>
-                                <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+                    {/* Alt Butonlar */}
+                    <View style={styles.buttonWrapper}>
+                        {currentIndex === slides.length - 1 ? (
+                            <TouchableOpacity
+                                style={[styles.mainButton, { backgroundColor: slides[currentIndex].color }]}
+                                onPress={handleCompleteOnboarding}
+                            >
+                                <Text style={styles.mainButtonText}>Hadi Başlayalım</Text>
+                                <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 8 }} />
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.navigationButtons}>
+                                <TouchableOpacity onPress={handleCompleteOnboarding} style={styles.skipButton}>
                                     <Text style={styles.skipText}>Atla</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={handleNext} style={styles.nextButton}>
-                                    <Text style={styles.nextText}>Devam Et</Text>
+
+                                <TouchableOpacity
+                                    style={[styles.nextButtonCircle, { backgroundColor: slides[currentIndex].color }]}
+                                    onPress={handleNext}
+                                >
+                                    <Ionicons name="chevron-forward" size={30} color="white" />
                                 </TouchableOpacity>
-                            </>
-                        ) : (
-                            <TouchableOpacity onPress={handleNext} style={[styles.nextButton, { width: '100%' }]}>
-                                <Text style={styles.nextText}>Başla</Text>
-                            </TouchableOpacity>
+                            </View>
                         )}
                     </View>
                 </View>
@@ -176,127 +215,162 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#fff',
     },
-    slide: {
-        width: width,
-        height: height,
-        alignItems: 'center',
-        paddingTop: 60,
-    },
-    splashTitle: {
-        fontSize: 40,
-        fontWeight: 'bold',
-        color: 'white',
-        marginTop: 20,
-    },
-    loadingContainer: {
-        marginTop: 50,
-    },
-    loadingDot: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        borderWidth: 4,
-        borderColor: 'rgba(255,255,255,0.3)',
-        borderTopColor: 'white',
-    },
-    mockupContainer: {
-        flex: 0.5,
+    fullScreenCenter: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        width: '100%',
     },
-    mockup: {
-        width: width * 0.7,
-        height: height * 0.4,
-        backgroundColor: '#fff',
-        borderRadius: 40,
-        borderWidth: 8,
-        borderColor: '#333',
-        overflow: 'hidden',
+    // Splash Styles
+    splashIconContainer: {
+        width: 140,
+        height: 140,
+        backgroundColor: 'white',
+        borderRadius: 70,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.2,
         shadowRadius: 20,
         elevation: 10,
     },
-    mockupScreen: {
-        flex: 1,
+    splashTitle: {
+        fontSize: 36,
+        fontWeight: '800',
+        color: 'white',
+        letterSpacing: 1,
+    },
+    splashSubtitle: {
+        fontSize: 16,
+        color: 'rgba(255,255,255,0.9)',
+        marginTop: 8,
+        fontWeight: '500',
+    },
+
+    // Slide Styles
+    slideContainer: {
+        width: width,
+        height: height,
+        alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    visualContainer: {
+        flex: 0.55,
+        width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
+        position: 'relative',
     },
-    contentContainer: {
-        flex: 0.3,
-        paddingHorizontal: 30,
+    circleBackground: {
+        position: 'absolute',
+        top: -height * 0.1,
+        width: width * 1.2,
+        height: width * 1.2,
+        borderRadius: width * 0.6,
+        opacity: 0.15,
+    },
+    iconCircle: {
+        width: 180,
+        height: 180,
+        backgroundColor: 'white',
+        borderRadius: 90,
+        justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 30,
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.15,
+        shadowRadius: 30,
+        elevation: 15, // Android gölge
+    },
+
+    textContainer: {
+        flex: 0.45,
+        paddingHorizontal: 40,
+        paddingTop: 40,
+        alignItems: 'center',
+        width: '100%',
     },
     title: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#2D3436',
         textAlign: 'center',
-        marginBottom: 15,
+        marginBottom: 16,
     },
     description: {
         fontSize: 16,
-        color: '#666',
+        color: '#636E72',
         textAlign: 'center',
         lineHeight: 24,
     },
-    footer: {
+
+    // Footer
+    footerContainer: {
         position: 'absolute',
         bottom: 50,
         left: 0,
         right: 0,
-        paddingHorizontal: 30,
+        paddingHorizontal: 32,
     },
     pagination: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginBottom: 30,
+        marginBottom: 40,
     },
     dot: {
         height: 8,
         borderRadius: 4,
-        marginHorizontal: 5,
+        marginHorizontal: 4,
     },
-    activeDot: {
-        width: 25,
-        backgroundColor: '#FF6B6B',
+
+    buttonWrapper: {
+        height: 60,
+        justifyContent: 'center',
     },
-    inactiveDot: {
-        width: 8,
-        backgroundColor: '#ddd',
-    },
-    buttonContainer: {
+    navigationButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        width: '100%',
     },
     skipButton: {
-        padding: 15,
+        padding: 10,
     },
     skipText: {
         fontSize: 16,
-        color: '#999',
+        color: '#B2BEC3',
         fontWeight: '600',
     },
-    nextButton: {
-        backgroundColor: '#FF6B6B',
-        paddingVertical: 15,
-        paddingHorizontal: 40,
+    nextButtonCircle: {
+        width: 60,
+        height: 60,
         borderRadius: 30,
-        shadowColor: '#FF6B6B',
-        shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
     },
-    nextText: {
+    mainButton: {
+        flexDirection: 'row',
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    mainButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
     },
 });
 
 export default OnboardingScreen;
+

@@ -39,9 +39,9 @@ export const themes = {
         },
         gradient: ['#1E1E1E', '#121212'],
         modes: {
-            pomodoro: ['#FF5252', '#D32F2F'],   // Canlı Kırmızı (Karanlıkta parlar)
-            shortBreak: ['#26A69A', '#00897B'], // Koyu Turkuaz/Yeşil
-            longBreak: ['#5C6BC0', '#3949AB'],  // İndigo/Mor
+            pomodoro: ['#FF5252', '#b51616ff'],
+            shortBreak: ['#26A69A', '#00897B'],
+            longBreak: ['#5C6BC0', '#888daeff'],
         }
     },
     ocean: {

@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+
+// import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart, PieChart } from 'react-native-chart-kit';
+// import { BarChart, PieChart } from 'react-native-chart-kit';
 import { getAllSessions, getTodaySessions, deleteAllSessions } from '../utils/storage';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
@@ -181,14 +182,11 @@ const ReportsScreen = () => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Header Arka Planı */}
-            <LinearGradient
-                colors={theme.gradient}
-                style={styles.headerBackground}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+            <View
+                style={[styles.headerBackground, { backgroundColor: theme.colors.primary }]}
             >
                 <Text style={styles.headerTitle}>Raporlar</Text>
-            </LinearGradient>
+            </View>
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
@@ -206,39 +204,30 @@ const ReportsScreen = () => {
                 {/* İstatistik Kartları */}
                 <View style={styles.statsGrid}>
                     {/* Bugün Kartı - Pomodoro Renkleri */}
-                    <LinearGradient
-                        colors={modeColors.pomodoro}
-                        style={styles.statCard}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
+                    <View
+                        style={[styles.statCard, { backgroundColor: modeColors.pomodoro[0] }]}
                     >
                         <View style={styles.statIconContainer}>
                             <Ionicons name="calendar" size={24} color="rgba(255,255,255,0.9)" />
                         </View>
                         <Text style={styles.statNumber}>{todayTotal}</Text>
                         <Text style={styles.statLabel}>Bugün (dk)</Text>
-                    </LinearGradient>
+                    </View>
 
                     {/* Tüm Zamanlar Kartı - Long Break Renkleri (Daha oturaklı) */}
-                    <LinearGradient
-                        colors={modeColors.longBreak}
-                        style={styles.statCard}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
+                    <View
+                        style={[styles.statCard, { backgroundColor: modeColors.longBreak[0] }]}
                     >
                         <View style={styles.statIconContainer}>
                             <Ionicons name="trophy" size={24} color="rgba(255,255,255,0.9)" />
                         </View>
                         <Text style={styles.statNumber}>{allTimeTotal}</Text>
                         <Text style={styles.statLabel}>Toplam (dk)</Text>
-                    </LinearGradient>
+                    </View>
 
                     {/* Dikkat Dağınıklığı Kartı - Kırmızı Tonları (Sabit veya Modifiye) */}
-                    <LinearGradient
-                        colors={['#FF5252', '#D32F2F']} // Dikkat için her zaman kırmızı iyidir
-                        style={[styles.statCard, styles.fullWidthCard]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
+                    <View
+                        style={[styles.statCard, styles.fullWidthCard, { backgroundColor: '#FF5252' }]}
                     >
                         <View style={styles.rowCenter}>
                             <View>
@@ -249,7 +238,7 @@ const ReportsScreen = () => {
                                 <Ionicons name="notifications-off" size={40} color="rgba(255,255,255,0.3)" />
                             </View>
                         </View>
-                    </LinearGradient>
+                    </View>
                 </View>
 
                 {/* Son 7 Gün Grafiği */}
@@ -259,51 +248,7 @@ const ReportsScreen = () => {
                         <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Haftalık Performans</Text>
                     </View>
 
-                    {hasChartData ? (
-                        <BarChart
-                            data={chartData}
-                            width={width - 60}
-                            height={220}
-                            yAxisLabel=""
-                            yAxisSuffix=" dk"
-                            chartConfig={{
-                                backgroundColor: theme.colors.card,
-                                backgroundGradientFrom: theme.colors.card,
-                                backgroundGradientTo: theme.colors.card,
-                                decimalPlaces: 0,
-                                color: (opacity = 1) => theme.id === 'dark'
-                                    ? `rgba(255, 255, 255, ${opacity})` // Dark mode'da beyaz barlar daha iyi görünür
-                                    : `rgba(${parseInt(theme.colors.primary.slice(1, 3), 16)}, ${parseInt(theme.colors.primary.slice(3, 5), 16)}, ${parseInt(theme.colors.primary.slice(5, 7), 16)}, ${opacity})`,
-                                labelColor: (opacity = 1) => theme.colors.text, // Dinamik text rengi
-                                style: {
-                                    borderRadius: 16
-                                },
-                                propsForBackgroundLines: {
-                                    strokeDasharray: '',
-                                    stroke: theme.colors.border,
-                                    strokeWidth: 1
-                                },
-                                propsForLabels: {
-                                    fontSize: 10
-                                },
-                                barPercentage: 0.7,
-                            }}
-                            style={{
-                                marginVertical: 8,
-                                borderRadius: 16,
-                                paddingRight: 0,
-                            }}
-                            showValuesOnTopOfBars={true}
-                            fromZero={true}
-                            withInnerLines={true}
-                            showBarTops={false}
-                        />
-                    ) : (
-                        <View style={styles.noDataContainer}>
-                            <Ionicons name="stats-chart" size={48} color={theme.colors.border} />
-                            <Text style={[styles.noDataText, { color: theme.colors.subText }]}>Son 7 günde veri yok</Text>
-                        </View>
-                    )}
+                    <Text>Grafikler geçici olarak devre dışı.</Text>
                 </View>
 
                 {/* Kategori Dağılımı Pie Chart */}
@@ -312,40 +257,7 @@ const ReportsScreen = () => {
                         <Ionicons name="pie-chart" size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
                         <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Kategori Dağılımı</Text>
                     </View>
-
-                    {hasPieData ? (
-                        <>
-                            <PieChart
-                                data={pieData}
-                                width={width - 40}
-                                height={220}
-                                chartConfig={{
-                                    color: (opacity = 1) => theme.colors.text,
-                                    labelColor: (opacity = 1) => theme.colors.text,
-                                }}
-                                accessor="population"
-                                backgroundColor="transparent"
-                                paddingLeft="15"
-                                center={[10, 0]}
-                                absolute
-                                hasLegend={true}
-                                style={{
-                                    marginVertical: 8,
-                                    borderRadius: 16
-                                }}
-                            />
-                            <View style={[styles.totalTimeContainer, { borderTopColor: theme.colors.border }]}>
-                                <Text style={[styles.totalTimeText, { color: theme.colors.subText }]}>
-                                    Toplam Odaklanma: <Text style={[styles.boldText, { color: theme.colors.text }]}>{allTimeTotal} dk</Text>
-                                </Text>
-                            </View>
-                        </>
-                    ) : (
-                        <View style={styles.noDataContainer}>
-                            <Ionicons name="pie-chart" size={48} color={theme.colors.border} />
-                            <Text style={[styles.noDataText, { color: theme.colors.subText }]}>Henüz kategori verisi yok</Text>
-                        </View>
-                    )}
+                    <Text>Grafikler geçici olarak devre dışı.</Text>
                 </View>
 
                 {/* Son Seanslar Başlığı */}
