@@ -4,11 +4,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, A
 // import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-// import { BarChart, PieChart } from 'react-native-chart-kit';
+import { BarChart, PieChart } from 'react-native-chart-kit';
 import { getAllSessions, getTodaySessions, deleteAllSessions } from '../utils/storage';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
 import { useTheme } from '../context/ThemeContext'; // Theme Context Eklendi
+import { useBadges } from '../context/BadgeContext';
+import { BadgeSection, BadgeGallery, BadgeUnlockModal } from '../components/badges/BadgeComponents';
 
 const { width } = Dimensions.get('window');
 
@@ -28,6 +30,10 @@ const ReportsScreen = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Badge Sistemi
+    const { checkBadges } = useBadges();
+    const [galleryVisible, setGalleryVisible] = useState(false);
+
     // Custom Alert Hook
     const { showAlert, hideAlert, alertConfig } = useCustomAlert();
 
@@ -39,6 +45,9 @@ const ReportsScreen = () => {
 
             setSessions(allData);
             setTodaySessions(todayData);
+
+            // --- ROZET KONTROLÜ İÇİN İSTATİSTİK HESAPLAMA ---
+            calculateAndCheckBadges(allData, todayData);
         } catch (error) {
             console.error('Veri yükleme hatası:', error);
         } finally {
@@ -53,6 +62,36 @@ const ReportsScreen = () => {
             loadData();
         }, [])
     );
+
+    // Rozet Kontrol Fonksiyonu
+    const calculateAndCheckBadges = (allSessions, todaySessions) => {
+        if (!allSessions || allSessions.length === 0) return;
+
+        // 1. Toplam Odaklanma (dk)
+        const totalFocusTime = allSessions.reduce((sum, s) => sum + s.duration, 0);
+
+        // 2. STREAK Hesaplama (Basitleştirilmiş Demo Mantığı)
+        // Son seans eğer bugünse ve önceki ile arasında çok fark yoksa streak artırılabilir.
+        // DEMO İÇİN: Son seansın süresini "currentStreak" (saniye) kabul edelim, böylece anında test edilebilir.
+        // Gerçek streak: Arka arkaya günlerde girilen seanslar
+        // Demo streak: Son seansın uzunluğu (saniye cinsinden)
+        const lastSession = allSessions[0]; // Genelde en yeni başa gelir (sıralamayı kontrol etmek lazım)
+        const currentStreakSeconds = lastSession ? lastSession.duration * 60 : 0;
+
+        // 3. Özel Durumlar
+        const completedWithoutDistraction = allSessions.filter(s => s.distractionCount === 0).length;
+
+        const stats = {
+            totalPomodoros: allSessions.length,
+            todayPomodoros: todaySessions.length,
+            currentStreak: currentStreakSeconds, // Demo için saniye
+            totalFocusTime: totalFocusTime,
+            completedWithoutDistraction: completedWithoutDistraction,
+            lastPomodoroDate: lastSession ? lastSession.date : null
+        };
+
+        checkBadges(stats);
+    };
 
     // Pull to Refresh
     const onRefresh = () => {
@@ -202,6 +241,8 @@ const ReportsScreen = () => {
                 showsVerticalScrollIndicator={false}
             >
                 {/* İstatistik Kartları */}
+                <BadgeSection onViewAll={() => setGalleryVisible(true)} />
+
                 <View style={styles.statsGrid}>
                     {/* Bugün Kartı - Pomodoro Renkleri */}
                     <View
@@ -248,7 +289,39 @@ const ReportsScreen = () => {
                         <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Haftalık Performans</Text>
                     </View>
 
-                    <Text>Grafikler geçici olarak devre dışı.</Text>
+                    {hasChartData ? (
+                        <BarChart
+                            data={chartData}
+                            width={width - 40}
+                            height={220}
+                            yAxisLabel=""
+                            yAxisSuffix=" dk"
+                            chartConfig={{
+                                backgroundColor: theme.colors.card,
+                                backgroundGradientFrom: theme.colors.card,
+                                backgroundGradientTo: theme.colors.card,
+                                decimalPlaces: 0,
+                                color: (opacity = 1) => theme.colors.primary,
+                                labelColor: (opacity = 1) => theme.colors.subText,
+                                style: {
+                                    borderRadius: 16,
+                                },
+                                barPercentage: 0.7,
+                            }}
+                            style={{
+                                marginVertical: 8,
+                                borderRadius: 16,
+                            }}
+                            fromZero
+                            showBarTops={false}
+                            showValuesOnTopOfBars={true}
+                        />
+                    ) : (
+                        <View style={styles.noDataContainer}>
+                            <Ionicons name="stats-chart-outline" size={48} color={theme.colors.border} />
+                            <Text style={[styles.noDataText, { color: theme.colors.subText }]}>Henüz veri yok</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Kategori Dağılımı Pie Chart */}
@@ -257,7 +330,26 @@ const ReportsScreen = () => {
                         <Ionicons name="pie-chart" size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
                         <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Kategori Dağılımı</Text>
                     </View>
-                    <Text>Grafikler geçici olarak devre dışı.</Text>
+                    {hasPieData ? (
+                        <PieChart
+                            data={pieData}
+                            width={width - 40}
+                            height={220}
+                            chartConfig={{
+                                color: (opacity = 1) => theme.colors.text,
+                                decimalPlaces: 0,
+                            }}
+                            accessor="population"
+                            backgroundColor="transparent"
+                            paddingLeft="15"
+                            absolute
+                        />
+                    ) : (
+                        <View style={styles.noDataContainer}>
+                            <Ionicons name="pie-chart-outline" size={48} color={theme.colors.border} />
+                            <Text style={[styles.noDataText, { color: theme.colors.subText }]}>Henüz veri yok</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Son Seanslar Başlığı */}
@@ -342,6 +434,10 @@ const ReportsScreen = () => {
                 icon={alertConfig.icon}
                 type={alertConfig.type}
             />
+
+            {/* Badge Modalları */}
+            <BadgeUnlockModal />
+            <BadgeGallery visible={galleryVisible} onClose={() => setGalleryVisible(false)} />
         </View>
     );
 };

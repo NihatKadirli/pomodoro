@@ -11,6 +11,8 @@ import { View, ActivityIndicator } from 'react-native';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { PetProvider } from './src/context/PetContext';
+import { BadgeProvider } from './src/context/BadgeContext';
+import { registerForPushNotificationsAsync } from './src/utils/notifications';
 
 // Ekranlar
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -70,6 +72,7 @@ export default function App() {
 
   useEffect(() => {
     checkLoginStatus();
+    registerForPushNotificationsAsync(); // Bildirim izni iste
   }, []);
 
   const checkLoginStatus = async () => {
@@ -90,14 +93,16 @@ export default function App() {
     <SettingsProvider>
       <ThemeProvider>
         <PetProvider>
-          <NavigationContainer>
-            <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="OTP" component={OTPScreen} />
-              <Stack.Screen name="MainApp" component={MainApp} />
-            </Stack.Navigator>
-          </NavigationContainer>
+          <BadgeProvider>
+            <NavigationContainer>
+              <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="OTP" component={OTPScreen} />
+                <Stack.Screen name="MainApp" component={MainApp} />
+              </Stack.Navigator>
+            </NavigationContainer>
+          </BadgeProvider>
         </PetProvider>
       </ThemeProvider>
     </SettingsProvider>
