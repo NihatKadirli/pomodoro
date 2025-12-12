@@ -10,6 +10,7 @@ import CustomAlert from '../components/CustomAlert';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import { saveSession } from '../utils/storage';
 import MotivationBanner from '../components/MotivationBanner';
+import { scheduleComeBackNotification, cancelNotifications } from '../utils/notifications';
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.65;
@@ -80,6 +81,8 @@ const TimerScreen = () => {
                     setDistractionCount(prev => prev + 1);
                     setIsActive(false);
                     wasInterruptedRef.current = true;
+                    // Bildirimi planla
+                    scheduleComeBackNotification();
                 }
 
                 // Active'e dönüş
@@ -90,6 +93,8 @@ const TimerScreen = () => {
                 ) {
                     console.log('✅ Kullanıcı geri döndü');
                     wasInterruptedRef.current = false;
+                    // Bildirimleri iptal et
+                    cancelNotifications();
 
                     setTimeout(() => {
                         showAlert({

@@ -22,7 +22,7 @@ Bu modül, Pomodoro uygulamanıza "Gamification" (Oyunlaştırma) özellikleri e
 
 ### 3. Pet Türleri
 - **Kedi (Varsayılan):** Başlangıçta açık.
-- **Köpek:** 100 dakika odaklanma gerektirir.
+- **Köpek:** 100 dakika odaklanma gerektirir. // bunlar şimdilik böyle uygulamanı denemek için dkları 1,5,10 dk gibi örnek süreler ayarladım daha sonra için geliştirile bilir.
 - **Ejderha:** 500 dakika odaklanma gerektirir.
 - **Robot:** 1000 dakika odaklanma gerektirir.
 - **Unicorn:** 2000 dakika odaklanma gerektirir.
